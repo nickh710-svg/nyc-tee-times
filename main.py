@@ -206,13 +206,14 @@ if view_mode == "One Course Detailed View":
 
     if st.button("Search", type="primary"):
         d_str = date.strftime("%Y-%m-%d")
-        # Fixed: Checking for 'chronogolf_v2' and calling fetch_skyway
+        # Updated Search Logic for your main.py
         if course_data[name]['type'] == 'chronogolf_v2':
             results = fetch_skyway(d_str, plys)
-        elif course_data[name]['type'] == 'golfnow_post':
-            results = fetch_marine_park(d_str, plys)
-        else:
+        elif course_data[name]['type'] == 'kenna':
             results = fetch_kenna(name, d_str, plys)
+        else:
+            # This catches anything we've paused or 'PENDING'
+            results = []
         
         for r in results:
             with st.container():
