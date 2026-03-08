@@ -97,3 +97,69 @@ def fetch_kenna(course_name, date_str, players):
                 
                 raw_p = 0
                 for k in ['greenFeeCart', 'greenFee', 'price', 'dueAtCourse']:
+                    if rate.get(k): raw_p = rate.get(k); break
+
+                standardized_times.append({
+                    "time": ny_time.strftime("%I:%M %p"),
+                    "course": course_name,
+                    "rate": rate.get('name', 'Standard'),
+                    "price": f"${raw_p / 100:.2f}",
+                    "players": f"{min(p_list)}-{max(p_list)}",
+                    "link": f"https://{c_info['url']}/?course={c_info['fac_id']}&date={date_str}"
+                })
+            return standardized_times
+    except: return []
+    return []
+
+# --- 5. UI Logic ---
+view_mode = st.radio("Select View", ["One Course Detailed View", "All Courses Daily View"], horizontal=True, label_visibility="collapsed")
+st.divider()
+
+if view_mode == "One Course Detailed View":
+    c1, c2, c3 = st.columns(3)
+    with c1: name = st.selectbox("Course", list(course_data.keys()))
+    with c2: date = st.date_input("Date", datetime.date.today())
+    with c3: plys = st.selectbox("Players", ["Any", 1, 2, 3, 4])
+
+    if st.button("Search", type="primary"):
+        d_str = date.strftime("%Y-%m-%d")
+        # Fixed: Checking for 'chronogolf_v2' and calling fetch_skyway
+        if course_data[name]['type'] == 'chronogolf_v2':
+            results = fetch_skyway(d_str, plys)
+        else:
+            results = fetch_kenna(name, d_str, plys)
+        
+        for r in results:
+            with st.container():
+                col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
+                with col_t: st.subheader(f"⏰ {r['time']}")
+                with col_d: 
+                    st.write(f"**{r['course']}** | {r['rate']}")
+                    st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
+                with col_b: st.link_button("Book", r['link'])
+                st.divider()
+
+elif view_mode == "All Courses Daily View":
+    c1, c2 = st.columns(2)
+    with c1: date = st.date_input("Select Date", datetime.date.today())
+    with c2: plys = st.selectbox("Players Needed", ["Any", 1, 2, 3, 4])
+
+    if st.button("Search All Courses", type="primary"):
+        d_str = date.strftime("%Y-%m-%d")
+        ui_cols = st.columns(len(course_data))
+        
+        for idx, name in enumerate(course_data.keys()):
+            with ui_cols[idx]:
+                st.subheader(name)
+                # Fixed: Call the correct function based on type
+                if course_data[name]['type'] == 'chronogolf_v2':
+                    results = fetch_skyway(d_str, plys)
+                else:
+                    results = fetch_kenna(name, d_str, plys)
+                    
+                for r in results:
+                    with st.container(border=True):
+                        st.write(f"**{r['time']}**")
+                        st.caption(f"🏌️ {r['players']} Players | {r['price']}")
+                        st.link_button("Book", r['link'], use_container_width=True)
+                if not results: st.info("No times.")
