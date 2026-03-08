@@ -21,14 +21,14 @@ course_data = {
         "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", 
         "alias": "skyway-golf-course", 
         "type": "chronogolf_v2"
-    },
-    "Marine Park": {"type": "golfnow_post"}
+    }
+    # "Marine Park": {"type": "golfnow_post"}
 }
 
 def fetch_marine_park(date_str, players):
     # Marine Park's specific cookie/token (paste yours here)
-    VERIF_TOKEN = "jQsdzxZMM9H84CHGa260Y5PSYKaUuwrgIQWWAF1eJDVTQ2O_HlWEKeE1SJTi72OPe04wOCWtQphRpLYxXtO2Kje3o_U1"
-    COOKIE = "PASTE_YOUR_FULL_COOKIE_STRING_HERE"
+    VERIF_TOKEN = ""
+    COOKIE = ""
     
     # Convert '2026-03-14' -> 'Mar 14 2026'
     dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
@@ -206,14 +206,13 @@ if view_mode == "One Course Detailed View":
 
     if st.button("Search", type="primary"):
         d_str = date.strftime("%Y-%m-%d")
-        # Updated Search Logic for your main.py
+        # Change this:
         if course_data[name]['type'] == 'chronogolf_v2':
             results = fetch_skyway(d_str, plys)
         elif course_data[name]['type'] == 'kenna':
             results = fetch_kenna(name, d_str, plys)
         else:
-            # This catches anything we've paused or 'PENDING'
-            results = []
+            results = [] # Skips Marine Park or PENDING courses safely
         
         for r in results:
             with st.container():
