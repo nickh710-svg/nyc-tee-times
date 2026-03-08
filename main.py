@@ -9,7 +9,7 @@ st.set_page_config(page_title="NYC Tee Times", page_icon="⛳", layout="wide")
 
 # --- 2. Data Structures ---
 course_data = {
-    "Pelham Bay": {"fac_id": "4111", "crs_id": "ANY", "alias": "pelham-bay-split-rock", "url": "pelham-bay-split-rock.book.teeitup.com", "type": "kenna"},
+    "Pelham Bay": {"fac_id": "4111", "crs_id": "54f14cc00c8ad60378b02cc5", "alias": "pelham-bay-split-rock", "url": "pelham-bay-split-rock.book.teeitup.com", "type": "kenna"},
     "Split Rock": {"fac_id": "19264", "crs_id": "ANY", "alias": "pelham-bay-split-rock", "url": "pelham-bay-split-rock.book.teeitup.com", "type": "kenna"},
     "Van Cortlandt": {"fac_id": "5043", "crs_id": "ANY", "alias": "golf-nyc", "url": "golf-nyc.book.teeitup.com", "type": "kenna"},
     "Dyker Beach": {"fac_id": "4048", "crs_id": "ANY", "alias": "dyker-beach-golf-course", "url": "dyker-beach-golf-course.book.teeitup.com", "type": "kenna"},
@@ -21,7 +21,10 @@ course_data = {
         "alias": "skyway-golf-course", 
         "type": "chronogolf_v2"
     },
-    # "Marine Park": {"type": "golfnow_post"}
+    "Marine Park": {
+        "type": "golfnow_link", 
+        "link": "https://www.golfnow.com/tee-times/facility/4857-marine-park-golf-course/search#facilitytype=0&sortby=Date&view=Grouping&holes=3&timeperiod=3&timemax=42&timemin=10&players=0&pricemax=10000&pricemin=0&promotedcampaignsonly=false"
+    }
 }
 
 # --- 3. Helper Functions ---
@@ -34,7 +37,7 @@ def filter_by_time(results, after_str, before_str):
             dt = datetime.datetime.strptime(t_str, "%I:%M %p")
             return dt.hour * 60 + dt.minute
         except:
-            return -1 # Fallback if parsing fails
+            return -1
 
     min_m = to_minutes(after_str) if after_str != "Any" else 0
     max_m = to_minutes(before_str) if before_str != "Any" else 1440
@@ -151,24 +154,20 @@ def fetch_kenna(course_name, date_str, players):
     except: return []
     return []
 
-
 # --- 4. Main UI & Sidebar ---
 st.title("⛳ NYC Tee Times")
 
 with st.sidebar:
     st.header("Search Parameters")
     
-    # 1. Switched default order so "All Courses" is first
     view_mode = st.radio("Select View", ["All Courses Daily View", "One Course Detailed View"])
     st.divider()
     
-    # The Form acts as our "Frozen" Search block
     with st.form("search_form"):
         if view_mode == "One Course Detailed View":
             name = st.selectbox("Course", list(course_data.keys()))
             selected_courses = [name]
         else:
-            # 5. Multiselect dropdown for All Courses view (defaults to all)
             selected_courses = st.multiselect("Courses to Show", list(course_data.keys()), default=list(course_data.keys()))
             
         date = st.date_input("Date", datetime.date.today())
@@ -176,13 +175,11 @@ with st.sidebar:
         
         st.write("Time Window")
         t_col1, t_col2 = st.columns(2)
-        # 2. Before and After Time Filters
         time_options = ["Any"] + [f"{h}:00 AM" for h in range(5, 12)] + ["12:00 PM"] + [f"{h}:00 PM" for h in range(1, 8)]
         with t_col1: t_after = st.selectbox("After", time_options, index=0)
         with t_col2: t_before = st.selectbox("Before", time_options, index=0)
         
-        # 3. Locked Search Button
-        st.write("") # spacing
+        st.write("") 
         submitted = st.form_submit_button("Search Tee Times", type="primary", use_container_width=True)
 
 # --- 5. Display Results ---
@@ -194,50 +191,49 @@ if submitted:
         
         if view_mode == "One Course Detailed View":
             name = selected_courses[0]
-            if course_data[name]['type'] == 'chronogolf_v2':
-                results = fetch_skyway(d_str, plys)
-            elif course_data[name]['type'] == 'kenna':
-                results = fetch_kenna(name, d_str, plys)
-            else:
-                results = []
-                
-            results = filter_by_time(results, t_after, t_before)
-            
             st.subheader(f"Results for {name} on {d_str}")
-            if not results:
-                st.info("No tee times found matching your criteria.")
+            
+            # --- OVERRIDE FOR MARINE PARK ---
+            if course_data[name]['type'] == 'golfnow_link':
+                mp_link = course_data[name]['link']
+                st.info(f"Data Not Pullable. Click [HERE]({mp_link}) for GolfNow Link")
+            else:
+                if course_data[name]['type'] == 'chronogolf_v2':
+                    results = fetch_skyway(d_str, plys)
+                elif course_data[name]['type'] == 'kenna':
+                    results = fetch_kenna(name, d_str, plys)
+                else:
+                    results = []
+                    
+                results = filter_by_time(results, t_after, t_before)
                 
-            for r in results:
-                with st.container():
-                    col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
-                    with col_t: st.subheader(f"⏰ {r['time']}")
-                    with col_d: 
-                        st.write(f"**{r['course']}** | {r['rate']}")
-                        st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
-                    with col_b: st.link_button("Book", r['link'], use_container_width=True)
-                    st.divider()
+                if not results:
+                    st.info("No tee times found matching your criteria.")
+                    
+                for r in results:
+                    with st.container():
+                        col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
+                        with col_t: st.subheader(f"⏰ {r['time']}")
+                        with col_d: 
+                            st.write(f"**{r['course']}** | {r['rate']}")
+                            st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
+                        with col_b: st.link_button("Book", r['link'], use_container_width=True)
+                        st.divider()
 
         elif view_mode == "All Courses Daily View":
-            # UPDATED CSS to fix transparency blending
             st.markdown("""
             <style>
-                /* Targets the invisible container holding our headers, ensuring it is opaque */
                 div.element-container:has(.sticky-header) {
                     position: sticky;
-                    top: 2.875rem; /* Height of Streamlit's top header */
+                    top: 2.875rem; 
                     z-index: 999;
                     padding-top: 0.5rem;
                     padding-bottom: 0.5rem;
                     border-bottom: 1px solid rgba(128, 128, 128, 0.2);
-                    
-                    /* THE FIX: We force an opaque, solid background color. 
-                       We set a safe white for light mode by default. */
                     background-color: #FFFFFF; 
                 }
-
-                /* Targets Streamlit's Dark Mode specifically to provide an opaque dark background */
                 [data-theme="dark"] div.element-container:has(.sticky-header) {
-                    background-color: #1A1D21; /* Solid dark grey (adapts to Streamlit's default dark theme) */
+                    background-color: #1A1D21; 
                 }
             </style>
             """, unsafe_allow_html=True)
@@ -246,9 +242,14 @@ if submitted:
             
             for idx, name in enumerate(selected_courses):
                 with ui_cols[idx]:
-                    # The rest of the loop remains the same
                     st.markdown(f"<div class='sticky-header'><h3 style='margin:0;'>{name}</h3></div>", unsafe_allow_html=True)
                     
+                    # --- OVERRIDE FOR MARINE PARK ---
+                    if course_data[name]['type'] == 'golfnow_link':
+                        mp_link = course_data[name]['link']
+                        st.info(f"Data Not Pullable. Click [HERE]({mp_link}) for GolfNow Link")
+                        continue # Skips the rest of the logic for Marine Park
+                        
                     if course_data[name]['type'] == 'chronogolf_v2':
                         results = fetch_skyway(d_str, plys)
                     elif course_data[name]['type'] == 'kenna':
