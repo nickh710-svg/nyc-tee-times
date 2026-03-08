@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import datetime
 from zoneinfo import ZoneInfo
+from curl_cffi import requests as curl_requests
 
 # --- 1. Page Setup ---
 st.set_page_config(page_title="NYC Tee Times", page_icon="⛳", layout="wide")
@@ -28,18 +29,16 @@ def fetch_chronogolf(course_name, date_str, players):
     c_info = course_data[course_name]
     url = f"https://www.chronogolf.com/marketplace/clubs/{c_info['fac_id']}/teetimes?date={date_str}&course_id={c_info['crs_id']}&nb_holes=9"
     
-    # Cloudscraper creates a session that mimics a real browser session
-    scraper = cloudscraper.create_scraper(
-        browser={
-            'browser': 'chrome',
-            'platform': 'windows',
-            'desktop': True
-        }
-    )
+    headers = {
+        "accept": "application/json",
+        "referer": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest"
+    }
     
     try:
-        # We use the scraper instead of requests
-        resp = scraper.get(url)
+        # We use impersonate="chrome110" to match our successful Colab test
+        resp = curl_requests.get(url, headers=headers, impersonate="chrome110")
         
         if resp.status_code == 200:
             raw_data = resp.json()
@@ -52,8 +51,7 @@ def fetch_chronogolf(course_name, date_str, players):
                 if players != "Any" and not (min_p <= int(players) <= max_p):
                     continue
                 
-                iso_time = slot.get('start_time')
-                dt = datetime.datetime.fromisoformat(iso_time)
+                dt = datetime.datetime.fromisoformat(slot.get('start_time'))
                 
                 standardized_times.append({
                     "time": dt.strftime("%I:%M %p"),
@@ -64,9 +62,7 @@ def fetch_chronogolf(course_name, date_str, players):
                     "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
                 })
             return standardized_times
-        else:
-            # If it still fails, we'll see the error code in your Streamlit logs
-            return []
+        return []
     except Exception:
         return []
 
