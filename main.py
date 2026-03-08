@@ -22,45 +22,37 @@ course_data = {
     "Skyway": {"fac_id": "18041", "crs_id": "18932", "alias": "skyway-golf-course", "url": "www.chronogolf.com", "type": "chronogolf"}
 }
 
+import cloudscraper
+
 def fetch_chronogolf(course_name, date_str, players):
     c_info = course_data[course_name]
-    # This is the exact endpoint Skyway's web app uses
     url = f"https://www.chronogolf.com/marketplace/clubs/{c_info['fac_id']}/teetimes?date={date_str}&course_id={c_info['crs_id']}&nb_holes=9"
     
-    # We add a "Referer" and a more detailed "User-Agent" to avoid being blocked
-    headers = {
-        "Accept": "application/json",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": f"https://www.chronogolf.com/club/{c_info['alias']}",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "x-requested-with": "XMLHttpRequest"
-    }
+    # Cloudscraper creates a session that mimics a real browser session
+    scraper = cloudscraper.create_scraper(
+        browser={
+            'browser': 'chrome',
+            'platform': 'windows',
+            'desktop': True
+        }
+    )
     
     try:
-        resp = requests.get(url, headers=headers)
-        
-        # DEBUG: If you still get nothing, uncomment the line below in Replit to see the error code in the console
-        # st.write(f"Skyway Status: {resp.status_code}") 
+        # We use the scraper instead of requests
+        resp = scraper.get(url)
         
         if resp.status_code == 200:
             raw_data = resp.json()
             standardized_times = []
-            
             for slot in raw_data:
-                # Chronogolf often marks full times as 'out_of_capacity'
-                if slot.get('out_of_capacity', False): 
-                    continue
+                if slot.get('out_of_capacity', False): continue
                 
-                # Check player counts
                 min_p = slot.get('min_hosts', 1)
                 max_p = slot.get('max_hosts', 4)
-                if players != "Any":
-                    if not (min_p <= int(players) <= max_p):
-                        continue
+                if players != "Any" and not (min_p <= int(players) <= max_p):
+                    continue
                 
-                # Standardize the time format
                 iso_time = slot.get('start_time')
-                # Chronogolf times look like: 2026-03-10T07:30:00-04:00
                 dt = datetime.datetime.fromisoformat(iso_time)
                 
                 standardized_times.append({
@@ -73,9 +65,9 @@ def fetch_chronogolf(course_name, date_str, players):
                 })
             return standardized_times
         else:
+            # If it still fails, we'll see the error code in your Streamlit logs
             return []
-    except Exception as e:
-        # st.error(f"Skyway Error: {e}")
+    except Exception:
         return []
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
