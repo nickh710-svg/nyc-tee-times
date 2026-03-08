@@ -16,8 +16,8 @@ course_data = {
     "Forest Park": {"fac_id": "5045", "crs_id": "ANY", "alias": "golf-nyc", "url": "golf-nyc.book.teeitup.com", "type": "kenna"},
     "Douglaston": {"fac_id": "5044", "crs_id": "ANY", "alias": "douglaston-golf-course", "url": "douglaston-golf-course.book.teeitup.com", "type": "kenna"},
     "Dunwoodie": {"fac_id": "5814", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
-    "Hudson Hills": {"fac_id": "3252", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
-    "Sprain Lake": {"fac_id": "5816", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
+    # "Hudson Hills": {"fac_id": "3252", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
+    # "Sprain Lake": {"fac_id": "5816", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
     # Skyway is marked as 'chronogolf' type
     "Skyway": {"fac_id": "18041", "crs_id": "18932", "alias": "skyway-golf-course", "url": "www.chronogolf.com", "type": "chronogolf"}
 }
