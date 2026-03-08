@@ -22,30 +22,45 @@ course_data = {
     "Skyway": {"fac_id": "18041", "crs_id": "18932", "alias": "skyway-golf-course", "url": "www.chronogolf.com", "type": "chronogolf"}
 }
 
-# --- 3. Helper: The Skyway Adapter ---
 def fetch_chronogolf(course_name, date_str, players):
     c_info = course_data[course_name]
-    # Chronogolf API URL
+    # This is the exact endpoint Skyway's web app uses
     url = f"https://www.chronogolf.com/marketplace/clubs/{c_info['fac_id']}/teetimes?date={date_str}&course_id={c_info['crs_id']}&nb_holes=9"
-    headers = {"Accept": "application/json", "User-Agent": "Mozilla/5.0"}
+    
+    # We add a "Referer" and a more detailed "User-Agent" to avoid being blocked
+    headers = {
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": f"https://www.chronogolf.com/club/{c_info['alias']}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "x-requested-with": "XMLHttpRequest"
+    }
     
     try:
         resp = requests.get(url, headers=headers)
+        
+        # DEBUG: If you still get nothing, uncomment the line below in Replit to see the error code in the console
+        # st.write(f"Skyway Status: {resp.status_code}") 
+        
         if resp.status_code == 200:
             raw_data = resp.json()
             standardized_times = []
+            
             for slot in raw_data:
-                # Filter players
-                out_players = slot.get('out_of_capacity', False)
-                if out_players: continue
+                # Chronogolf often marks full times as 'out_of_capacity'
+                if slot.get('out_of_capacity', False): 
+                    continue
                 
-                # Check min/max players if requested
+                # Check player counts
+                min_p = slot.get('min_hosts', 1)
+                max_p = slot.get('max_hosts', 4)
                 if players != "Any":
-                    if not (slot.get('min_hosts', 1) <= int(players) <= slot.get('max_hosts', 4)):
+                    if not (min_p <= int(players) <= max_p):
                         continue
                 
-                # Standardize fields to match our UI
-                iso_time = slot.get('start_time') # Format: 2026-03-10T07:00:00-04:00
+                # Standardize the time format
+                iso_time = slot.get('start_time')
+                # Chronogolf times look like: 2026-03-10T07:30:00-04:00
                 dt = datetime.datetime.fromisoformat(iso_time)
                 
                 standardized_times.append({
@@ -53,13 +68,15 @@ def fetch_chronogolf(course_name, date_str, players):
                     "course": course_name,
                     "rate": "Standard (9 Holes)",
                     "price": f"${slot.get('green_fee_price', 0) / 100:.2f}",
-                    "players": f"{slot.get('min_hosts', 1)}-{slot.get('max_hosts', 4)}",
+                    "players": f"{min_p}-{max_p}",
                     "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
                 })
             return standardized_times
-    except:
+        else:
+            return []
+    except Exception as e:
+        # st.error(f"Skyway Error: {e}")
         return []
-    return []
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
