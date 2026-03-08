@@ -218,14 +218,15 @@ if submitted:
                     st.divider()
 
         elif view_mode == "All Courses Daily View":
-            # This custom CSS makes the course names "sticky" when scrolling down
+            # This updated CSS targets the Streamlit 'wrapper' box directly
             st.markdown("""
             <style>
-                h3 {
+                /* We use the :has() selector to find the exact invisible container holding our headers */
+                div.element-container:has(.sticky-header) {
                     position: sticky;
-                    top: 2.875rem; 
-                    background-color: var(--background-color);
-                    z-index: 99;
+                    top: 2.875rem; /* Height of Streamlit's top header */
+                    background-color: var(--background-color); /* Adapts to light/dark mode */
+                    z-index: 999;
                     padding-top: 0.5rem;
                     padding-bottom: 0.5rem;
                     border-bottom: 1px solid rgba(128, 128, 128, 0.2);
@@ -237,7 +238,8 @@ if submitted:
             
             for idx, name in enumerate(selected_courses):
                 with ui_cols[idx]:
-                    st.subheader(name)
+                    # We inject a class here that acts as a 'tracker' for our CSS above
+                    st.markdown(f"<div class='sticky-header'><h3 style='margin:0;'>{name}</h3></div>", unsafe_allow_html=True)
                     
                     if course_data[name]['type'] == 'chronogolf_v2':
                         results = fetch_skyway(d_str, plys)
