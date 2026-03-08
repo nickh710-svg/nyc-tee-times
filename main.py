@@ -17,20 +17,16 @@ course_data = {
     "Forest Park": {"fac_id": "5045", "crs_id": "ANY", "alias": "golf-nyc", "url": "golf-nyc.book.teeitup.com", "type": "kenna"},
     "Douglaston": {"fac_id": "5044", "crs_id": "ANY", "alias": "douglaston-golf-course", "url": "douglaston-golf-course.book.teeitup.com", "type": "kenna"},
     "Dunwoodie": {"fac_id": "5814", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
-    # "Hudson Hills": {"fac_id": "3252", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
-    # "Sprain Lake": {"fac_id": "5816", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
-    # Skyway is marked as 'chronogolf' type
     "Skyway": {
-    "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", # The UUID we verified
-    "alias": "skyway-golf-course", 
-    "type": "chronogolf_v2"
+        "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", 
+        "alias": "skyway-golf-course", 
+        "type": "chronogolf_v2"
     }
 }
 
+# --- 3. Helper: Skyway v2 Adapter ---
 def fetch_skyway(date_str, players):
     c_info = course_data["Skyway"]
-    
-    # We build the EXACT string that worked in Colab
     full_url = (
         f"https://www.chronogolf.com/marketplace/v2/teetimes?"
         f"start_date={date_str}&"
@@ -46,22 +42,37 @@ def fetch_skyway(date_str, players):
     }
     
     try:
-        # Use the full_url directly instead of 'params='
         resp = curl_requests.get(full_url, headers=headers, impersonate="chrome110")
-        
         if resp.status_code == 200:
             data = resp.json()
             slots = data.get('teetimes', [])
-            # ... (rest of your mapping logic)
+            standardized_times = []
+            
+            for s in slots:
+                min_p = s.get('min_player_size', 1)
+                max_p = s.get('max_player_size', 4)
+                if players != "Any" and not (min_p <= int(players) <= max_p):
+                    continue
+                
+                price_val = s.get('default_price', {}).get('subtotal', 0.0)
+                
+                standardized_times.append({
+                    "time": s.get('start_time'),
+                    "course": "Skyway",
+                    "rate": s.get('default_price', {}).get('affiliation_type', 'Standard'),
+                    "price": f"${price_val:.2f}",
+                    "players": f"{min_p}-{max_p}",
+                    "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
+                })
+            return standardized_times
+    except Exception:
+        return []
+    return []
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
     c_info = course_data[course_name]
-    
-    # CHANGE 1: Use .get() so it returns None instead of crashing if the key is missing
     crs_id = c_info.get('crs_id') 
-    
-    # CHANGE 2: Skip if it's PENDING or if it's not a Kenna course (like Skyway)
     if crs_id == "PENDING" or crs_id is None: 
         return []
     
@@ -84,63 +95,5 @@ def fetch_kenna(course_name, date_str, players):
                 utc_time = datetime.datetime.strptime(s['teetime'], "%Y-%m-%dT%H:%M:%S.000Z").replace(tzinfo=ZoneInfo("UTC"))
                 ny_time = utc_time.astimezone(ZoneInfo("America/New_York"))
                 
-                # Price logic
                 raw_p = 0
                 for k in ['greenFeeCart', 'greenFee', 'price', 'dueAtCourse']:
-                    if rate.get(k): raw_p = rate.get(k); break
-
-                standardized_times.append({
-                    "time": ny_time.strftime("%I:%M %p"),
-                    "course": course_name,
-                    "rate": rate.get('name', 'Standard'),
-                    "price": f"${raw_p / 100:.2f}",
-                    "players": f"{min(p_list)}-{max(p_list)}",
-                    "link": f"https://{c_info['url']}/?course={c_info['fac_id']}&date={date_str}"
-                })
-            return standardized_times
-    except: return []
-    return []
-
-# --- 5. UI Logic ---
-view_mode = st.radio("Select View", ["One Course Detailed View", "All Courses Daily View"], horizontal=True, label_visibility="collapsed")
-st.divider()
-
-if view_mode == "One Course Detailed View":
-    c1, c2, c3 = st.columns(3)
-    with c1: name = st.selectbox("Course", list(course_data.keys()))
-    with c2: date = st.date_input("Date", datetime.date.today())
-    with c3: plys = st.selectbox("Players", ["Any", 1, 2, 3, 4])
-
-    if st.button("Search", type="primary"):
-        d_str = date.strftime("%Y-%m-%d")
-        results = fetch_chronogolf(name, d_str, plys) if course_data[name]['type'] == 'chronogolf' else fetch_kenna(name, d_str, plys)
-        
-        for r in results:
-            with st.container():
-                col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
-                with col_t: st.subheader(f"⏰ {r['time']}")
-                with col_d: 
-                    st.write(f"**{r['course']}** | {r['rate']}")
-                    st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
-                with col_b: st.link_button("Book", r['link'])
-                st.divider()
-
-elif view_mode == "All Courses Daily View":
-    c1, c2 = st.columns(2)
-    with c1: date = st.date_input("Select Date", datetime.date.today())
-    with c2: plys = st.selectbox("Players Needed", ["Any", 1, 2, 3, 4])
-
-    if st.button("Search All Courses", type="primary"):
-        d_str = date.strftime("%Y-%m-%d")
-        ui_cols = st.columns(len(course_data))
-        
-        for idx, name in enumerate(course_data.keys()):
-            with ui_cols[idx]:
-                st.subheader(name)
-                results = fetch_chronogolf(name, d_str, plys) if course_data[name]['type'] == 'chronogolf' else fetch_kenna(name, d_str, plys)
-                for r in results:
-                    with st.container(border=True):
-                        st.write(f"**{r['time']}**")
-                        st.caption(f"🏌️ {r['players']} Players | {r['price']}")
-                        st.link_button("Book", r['link'], use_container_width=True)
-                if not results: st.info("No times.")
