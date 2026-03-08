@@ -20,51 +20,63 @@ course_data = {
     # "Hudson Hills": {"fac_id": "3252", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
     # "Sprain Lake": {"fac_id": "5816", "crs_id": "ANY", "alias": "westchester-county", "url": "westchester-county.book.teeitup.com", "type": "kenna"},
     # Skyway is marked as 'chronogolf' type
-    "Skyway": {"fac_id": "18041", "crs_id": "18932", "alias": "skyway-golf-course", "url": "www.chronogolf.com", "type": "chronogolf"}
+    "Skyway": {
+    "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", # The UUID we verified
+    "alias": "skyway-golf-course", 
+    "type": "chronogolf_v2"
+    }
 }
 
-import cloudscraper
-
-def fetch_chronogolf(course_name, date_str, players):
-    c_info = course_data[course_name]
-    url = f"https://www.chronogolf.com/marketplace/clubs/{c_info['fac_id']}/teetimes?date={date_str}&course_id={c_info['crs_id']}&nb_holes=9"
+def fetch_skyway(date_str, players):
+    c_info = course_data["Skyway"]
+    url = "https://www.chronogolf.com/marketplace/v2/teetimes"
+    
+    # These are the exact params from your verified request URL
+    params = {
+        "start_date": date_str,
+        "course_ids": c_info["fac_id"],
+        "holes": "9",
+        "page": "1"
+    }
     
     headers = {
         "accept": "application/json",
         "referer": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "x-requested-with": "XMLHttpRequest"
     }
     
     try:
-        # We use impersonate="chrome110" to match our successful Colab test
-        resp = curl_requests.get(url, headers=headers, impersonate="chrome110")
+        # The 'chrome110' impersonation is what gets us past Cloudflare
+        resp = curl_requests.get(url, headers=headers, params=params, impersonate="chrome110")
         
         if resp.status_code == 200:
-            raw_data = resp.json()
+            data = resp.json()
+            slots = data.get('teetimes', []) # Using the verified 'teetimes' key
             standardized_times = []
-            for slot in raw_data:
-                if slot.get('out_of_capacity', False): continue
-                
-                min_p = slot.get('min_hosts', 1)
-                max_p = slot.get('max_hosts', 4)
+            
+            for s in slots:
+                # Filter by player count if requested
+                min_p = s.get('min_player_size', 1)
+                max_p = s.get('max_player_size', 4)
                 if players != "Any" and not (min_p <= int(players) <= max_p):
                     continue
                 
-                dt = datetime.datetime.fromisoformat(slot.get('start_time'))
+                # Extract the price from the nested 'default_price' object
+                price_val = s.get('default_price', {}).get('subtotal', 0.0)
                 
                 standardized_times.append({
-                    "time": dt.strftime("%I:%M %p"),
-                    "course": course_name,
-                    "rate": "Standard (9 Holes)",
-                    "price": f"${slot.get('green_fee_price', 0) / 100:.2f}",
+                    "time": s.get('start_time'), # e.g., "6:10"
+                    "course": "Skyway",
+                    "rate": s.get('default_price', {}).get('affiliation_type', 'Standard'),
+                    "price": f"${price_val:.2f}",
                     "players": f"{min_p}-{max_p}",
                     "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
                 })
             return standardized_times
-        return []
     except Exception:
         return []
+    return []
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
