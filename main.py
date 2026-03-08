@@ -21,8 +21,63 @@ course_data = {
         "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", 
         "alias": "skyway-golf-course", 
         "type": "chronogolf_v2"
-    }
+    },
+    "Marine Park": {"type": "golfnow_post"}
 }
+
+def fetch_marine_park(date_str, players):
+    # Marine Park's specific cookie/token (paste yours here)
+    VERIF_TOKEN = "jQsdzxZMM9H84CHGa260Y5PSYKaUuwrgIQWWAF1eJDVTQ2O_HlWEKeE1SJTi72OPe04wOCWtQphRpLYxXtO2Kje3o_U1"
+    COOKIE = "PASTE_YOUR_FULL_COOKIE_STRING_HERE"
+    
+    # Convert '2026-03-14' -> 'Mar 14 2026'
+    dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+    gn_date = dt.strftime("%b %d %Y") # Format: Mar 14 2026
+
+    url = "https://www.golfnow.com/api/tee-times/tee-time-results"
+    
+    payload = {
+        "Radius": 35, "Latitude": 28.5383, "Longitude": -81.3792,
+        "PageSize": 30, "PageNumber": 0, "SearchType": 1,
+        "CurrentClientDate": datetime.datetime.now().isoformat() + "Z",
+        "Date": gn_date,
+        "FacilityId": 4857,
+        "Holes": "3", "Players": "0",
+        "RateType": "all", "SortBy": "Date", "View": "Grouping"
+    }
+
+    headers = {
+        "__requestverificationtoken": VERIF_TOKEN,
+        "cookie": COOKIE,
+        "content-type": "application/json; charset=UTF-8",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "x-requested-with": "XMLHttpRequest"
+    }
+
+    try:
+        # Use curl_requests to mimic a real browser SSL fingerprint
+        resp = curl_requests.post(url, headers=headers, json=payload, impersonate="chrome110")
+        if resp.status_code == 200:
+            data = resp.json()
+            slots = data.get('ttResults', {}).get('teeTimes', [])
+            standardized = []
+            
+            for s in slots:
+                # Filter by player count if needed
+                # (Defaulting to 1-4 as Marine Park is standard)
+                
+                standardized.append({
+                    "time": s.get('formattedTimeMeridian'), # "10:40 AM"
+                    "course": "Marine Park",
+                    "rate": "Standard",
+                    "price": s.get('minRateFormatted'), # "$75.00"
+                    "players": "1-4",
+                    "link": f"https://www.golfnow.com/tee-times/facility/4857-marine-park-golf-course/search#date={date_str}"
+                })
+            return standardized
+    except Exception:
+        return []
+    return []
 
 def fetch_skyway(date_str, players):
     c_info = course_data["Skyway"]
@@ -154,6 +209,8 @@ if view_mode == "One Course Detailed View":
         # Fixed: Checking for 'chronogolf_v2' and calling fetch_skyway
         if course_data[name]['type'] == 'chronogolf_v2':
             results = fetch_skyway(d_str, plys)
+        elif course_data[name]['type'] == 'golfnow_post':
+            results = fetch_marine_park(d_str, plys)
         else:
             results = fetch_kenna(name, d_str, plys)
         
