@@ -81,7 +81,13 @@ def fetch_skyway(date_str, players):
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
     c_info = course_data[course_name]
-    if c_info['crs_id'] == "PENDING": return []
+    
+    # CHANGE 1: Use .get() so it returns None instead of crashing if the key is missing
+    crs_id = c_info.get('crs_id') 
+    
+    # CHANGE 2: Skip if it's PENDING or if it's not a Kenna course (like Skyway)
+    if crs_id == "PENDING" or crs_id is None: 
+        return []
     
     url = f"https://phx-api-be-east-1b.kenna.io/v2/tee-times?date={date_str}&facilityIds={c_info['fac_id']}"
     headers = {"x-be-alias": c_info["alias"], "User-Agent": "Mozilla/5.0"}
