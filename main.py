@@ -5,39 +5,12 @@ from zoneinfo import ZoneInfo
 from curl_cffi import requests as curl_requests
 
 # --- 1. Page Setup ---
-st.set_page_config(page_title="NYC Tee Times", page_icon="⛳", layout="wide")
-
-# --- UI Polish: Sidebar Toggle Button ---
-st.markdown("""
-<style>
-    /* Turns the closed sidebar toggle icon into a labeled pill button */
-    [data-testid="collapsedControl"] {
-        width: auto !important;
-        padding: 0px 15px 0px 10px !important;
-        border-radius: 20px !important;
-        background-color: #FFFFFF !important;
-        color: #31333F !important;
-        border: 1px solid #dcdcdc !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05) !important;
-        transition: all 0.2s ease;
-    }
-    
-    /* Adds the actual text next to the chevron */
-    [data-testid="collapsedControl"]::after {
-        content: "Click for Filter Choices";
-        margin-left: 8px;
-        font-weight: 600;
-        font-size: 14px;
-        color: #31333F;
-    }
-    
-    /* Hover effect to make it feel clickable */
-    [data-testid="collapsedControl"]:hover {
-        background-color: #f0f2f6 !important;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.set_page_config(
+    page_title="NYC Tee Times", 
+    page_icon="⛳", 
+    layout="wide", 
+    initial_sidebar_state="expanded" # <-- This forces it open
+)
 
 # --- 2. Data Structures ---
 course_data = {
