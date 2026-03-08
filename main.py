@@ -6,7 +6,6 @@ from curl_cffi import requests as curl_requests
 
 # --- 1. Page Setup ---
 st.set_page_config(page_title="NYC Tee Times", page_icon="⛳", layout="wide")
-st.title("⛳ NYC Municipal Tee Times")
 
 # --- 2. Data Structures ---
 course_data = {
@@ -21,63 +20,31 @@ course_data = {
         "fac_id": "0b833d14-8c0d-46ca-82e6-7b992de4761e", 
         "alias": "skyway-golf-course", 
         "type": "chronogolf_v2"
-    }
+    },
     # "Marine Park": {"type": "golfnow_post"}
 }
 
-def fetch_marine_park(date_str, players):
-    # Marine Park's specific cookie/token (paste yours here)
-    VERIF_TOKEN = ""
-    COOKIE = ""
+# --- 3. Helper Functions ---
+def filter_by_time(results, after_str, before_str):
+    if after_str == "Any" and before_str == "Any":
+        return results
     
-    # Convert '2026-03-14' -> 'Mar 14 2026'
-    dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-    gn_date = dt.strftime("%b %d %Y") # Format: Mar 14 2026
+    def to_minutes(t_str):
+        try:
+            dt = datetime.datetime.strptime(t_str, "%I:%M %p")
+            return dt.hour * 60 + dt.minute
+        except:
+            return -1 # Fallback if parsing fails
 
-    url = "https://www.golfnow.com/api/tee-times/tee-time-results"
+    min_m = to_minutes(after_str) if after_str != "Any" else 0
+    max_m = to_minutes(before_str) if before_str != "Any" else 1440
     
-    payload = {
-        "Radius": 35, "Latitude": 28.5383, "Longitude": -81.3792,
-        "PageSize": 30, "PageNumber": 0, "SearchType": 1,
-        "CurrentClientDate": datetime.datetime.now().isoformat() + "Z",
-        "Date": gn_date,
-        "FacilityId": 4857,
-        "Holes": "3", "Players": "0",
-        "RateType": "all", "SortBy": "Date", "View": "Grouping"
-    }
-
-    headers = {
-        "__requestverificationtoken": VERIF_TOKEN,
-        "cookie": COOKIE,
-        "content-type": "application/json; charset=UTF-8",
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "x-requested-with": "XMLHttpRequest"
-    }
-
-    try:
-        # Use curl_requests to mimic a real browser SSL fingerprint
-        resp = curl_requests.post(url, headers=headers, json=payload, impersonate="chrome110")
-        if resp.status_code == 200:
-            data = resp.json()
-            slots = data.get('ttResults', {}).get('teeTimes', [])
-            standardized = []
-            
-            for s in slots:
-                # Filter by player count if needed
-                # (Defaulting to 1-4 as Marine Park is standard)
-                
-                standardized.append({
-                    "time": s.get('formattedTimeMeridian'), # "10:40 AM"
-                    "course": "Marine Park",
-                    "rate": "Standard",
-                    "price": s.get('minRateFormatted'), # "$75.00"
-                    "players": "1-4",
-                    "link": f"https://www.golfnow.com/tee-times/facility/4857-marine-park-golf-course/search#date={date_str}"
-                })
-            return standardized
-    except Exception:
-        return []
-    return []
+    filtered = []
+    for r in results:
+        r_m = to_minutes(r['time'])
+        if r_m != -1 and min_m <= r_m <= max_m:
+            filtered.append(r)
+    return filtered
 
 def fetch_skyway(date_str, players):
     c_info = course_data["Skyway"]
@@ -93,7 +60,6 @@ def fetch_skyway(date_str, players):
 
     try:
         while True:
-            # We add the 'page' variable to the URL to cycle through results
             full_url = (
                 f"https://www.chronogolf.com/marketplace/v2/teetimes?"
                 f"start_date={date_str}&"
@@ -109,26 +75,20 @@ def fetch_skyway(date_str, players):
             data = resp.json()
             slots = data.get('teetimes', [])
             
-            # If the list is empty, we've reached the end of the tee sheet
             if not slots:
                 break
                 
             for s in slots:
-                # 1. Filter by players
                 min_p = s.get('min_player_size', 1)
                 max_p = s.get('max_player_size', 4)
                 if players != "Any" and not (min_p <= int(players) <= max_p):
                     continue
                 
-                # 2. Fix the Time Formatting (Adding AM/PM)
-                # We use the ISO timestamp 'starts_at' to be 100% accurate
-                raw_ts = s.get('starts_at') # Format: 2026-03-12T10:10:00Z
+                raw_ts = s.get('starts_at') 
                 dt_obj = datetime.datetime.fromisoformat(raw_ts.replace('Z', '+00:00'))
-                # Convert from UTC to NY time (Skyway is UTC-4 or -5)
                 ny_time = dt_obj.astimezone(ZoneInfo("America/New_York"))
                 display_time = ny_time.strftime("%I:%M %p")
                 
-                # 3. Get Price
                 price_val = s.get('default_price', {}).get('subtotal', 0.0)
                 
                 all_standardized_times.append({
@@ -140,9 +100,7 @@ def fetch_skyway(date_str, players):
                     "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
                 })
             
-            # Move to the next page
             page += 1
-            # Safety break: stop if we've pulled 5 pages (rarely needed for one course)
             if page > 5:
                 break
                 
@@ -152,7 +110,6 @@ def fetch_skyway(date_str, players):
         print(f"Skyway Error: {e}")
         return []
 
-# --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
     c_info = course_data[course_name]
     crs_id = c_info.get('crs_id') 
@@ -194,57 +151,107 @@ def fetch_kenna(course_name, date_str, players):
     except: return []
     return []
 
-# --- 5. UI Logic ---
-view_mode = st.radio("Select View", ["One Course Detailed View", "All Courses Daily View"], horizontal=True, label_visibility="collapsed")
-st.divider()
 
-if view_mode == "One Course Detailed View":
-    c1, c2, c3 = st.columns(3)
-    with c1: name = st.selectbox("Course", list(course_data.keys()))
-    with c2: date = st.date_input("Date", datetime.date.today())
-    with c3: plys = st.selectbox("Players", ["Any", 1, 2, 3, 4])
+# --- 4. Main UI & Sidebar ---
+st.title("⛳ NYC Tee Times")
 
-    if st.button("Search", type="primary"):
-        d_str = date.strftime("%Y-%m-%d")
-        # Change this:
-        if course_data[name]['type'] == 'chronogolf_v2':
-            results = fetch_skyway(d_str, plys)
-        elif course_data[name]['type'] == 'kenna':
-            results = fetch_kenna(name, d_str, plys)
+with st.sidebar:
+    st.header("Search Parameters")
+    
+    # 1. Switched default order so "All Courses" is first
+    view_mode = st.radio("Select View", ["All Courses Daily View", "One Course Detailed View"])
+    st.divider()
+    
+    # The Form acts as our "Frozen" Search block
+    with st.form("search_form"):
+        if view_mode == "One Course Detailed View":
+            name = st.selectbox("Course", list(course_data.keys()))
+            selected_courses = [name]
         else:
-            results = [] # Skips Marine Park or PENDING courses safely
+            # 5. Multiselect dropdown for All Courses view (defaults to all)
+            selected_courses = st.multiselect("Courses to Show", list(course_data.keys()), default=list(course_data.keys()))
+            
+        date = st.date_input("Date", datetime.date.today())
+        plys = st.selectbox("Players Needed", ["Any", 1, 2, 3, 4])
         
-        for r in results:
-            with st.container():
-                col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
-                with col_t: st.subheader(f"⏰ {r['time']}")
-                with col_d: 
-                    st.write(f"**{r['course']}** | {r['rate']}")
-                    st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
-                with col_b: st.link_button("Book", r['link'])
-                st.divider()
+        st.write("Time Window")
+        t_col1, t_col2 = st.columns(2)
+        # 2. Before and After Time Filters
+        time_options = ["Any"] + [f"{h}:00 AM" for h in range(5, 12)] + ["12:00 PM"] + [f"{h}:00 PM" for h in range(1, 8)]
+        with t_col1: t_after = st.selectbox("After", time_options, index=0)
+        with t_col2: t_before = st.selectbox("Before", time_options, index=0)
+        
+        # 3. Locked Search Button
+        st.write("") # spacing
+        submitted = st.form_submit_button("Search Tee Times", type="primary", use_container_width=True)
 
-elif view_mode == "All Courses Daily View":
-    c1, c2 = st.columns(2)
-    with c1: date = st.date_input("Select Date", datetime.date.today())
-    with c2: plys = st.selectbox("Players Needed", ["Any", 1, 2, 3, 4])
-
-    if st.button("Search All Courses", type="primary"):
+# --- 5. Display Results ---
+if submitted:
+    if not selected_courses:
+        st.warning("Please select at least one course to search.")
+    else:
         d_str = date.strftime("%Y-%m-%d")
-        ui_cols = st.columns(len(course_data))
         
-        for idx, name in enumerate(course_data.keys()):
-            with ui_cols[idx]:
-                st.subheader(name)
-                # Fixed: Call the correct function based on type
-                if course_data[name]['type'] == 'chronogolf_v2':
-                    results = fetch_skyway(d_str, plys)
-                else:
-                    results = fetch_kenna(name, d_str, plys)
+        if view_mode == "One Course Detailed View":
+            name = selected_courses[0]
+            if course_data[name]['type'] == 'chronogolf_v2':
+                results = fetch_skyway(d_str, plys)
+            elif course_data[name]['type'] == 'kenna':
+                results = fetch_kenna(name, d_str, plys)
+            else:
+                results = []
+                
+            results = filter_by_time(results, t_after, t_before)
+            
+            st.subheader(f"Results for {name} on {d_str}")
+            if not results:
+                st.info("No tee times found matching your criteria.")
+                
+            for r in results:
+                with st.container():
+                    col_t, col_d, col_b = st.columns([1.5, 3, 1.5])
+                    with col_t: st.subheader(f"⏰ {r['time']}")
+                    with col_d: 
+                        st.write(f"**{r['course']}** | {r['rate']}")
+                        st.caption(f"🏌️ {r['players']} players | 💵 {r['price']}")
+                    with col_b: st.link_button("Book", r['link'], use_container_width=True)
+                    st.divider()
+
+        elif view_mode == "All Courses Daily View":
+            # This custom CSS makes the course names "sticky" when scrolling down
+            st.markdown("""
+            <style>
+                h3 {
+                    position: sticky;
+                    top: 2.875rem; 
+                    background-color: var(--background-color);
+                    z-index: 99;
+                    padding-top: 0.5rem;
+                    padding-bottom: 0.5rem;
+                    border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+                }
+            </style>
+            """, unsafe_allow_html=True)
+
+            ui_cols = st.columns(len(selected_courses))
+            
+            for idx, name in enumerate(selected_courses):
+                with ui_cols[idx]:
+                    st.subheader(name)
                     
-                for r in results:
-                    with st.container(border=True):
-                        st.write(f"**{r['time']}**")
-                        st.caption(f"🏌️ {r['players']} Players | {r['price']}")
-                        st.link_button("Book", r['link'], use_container_width=True)
-                if not results: st.info("No times.")
+                    if course_data[name]['type'] == 'chronogolf_v2':
+                        results = fetch_skyway(d_str, plys)
+                    elif course_data[name]['type'] == 'kenna':
+                        results = fetch_kenna(name, d_str, plys)
+                    else:
+                        results = []
+                        
+                    results = filter_by_time(results, t_after, t_before)
+                        
+                    for r in results:
+                        with st.container(border=True):
+                            st.write(f"**{r['time']}**")
+                            st.caption(f"🏌️ {r['players']} | {r['price']}")
+                            st.link_button("Book", r['link'], use_container_width=True)
+                    if not results: 
+                        st.info("No times.")
