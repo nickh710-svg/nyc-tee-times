@@ -218,18 +218,26 @@ if submitted:
                     st.divider()
 
         elif view_mode == "All Courses Daily View":
-            # This updated CSS targets the Streamlit 'wrapper' box directly
+            # UPDATED CSS to fix transparency blending
             st.markdown("""
             <style>
-                /* We use the :has() selector to find the exact invisible container holding our headers */
+                /* Targets the invisible container holding our headers, ensuring it is opaque */
                 div.element-container:has(.sticky-header) {
                     position: sticky;
                     top: 2.875rem; /* Height of Streamlit's top header */
-                    background-color: var(--background-color); /* Adapts to light/dark mode */
                     z-index: 999;
                     padding-top: 0.5rem;
                     padding-bottom: 0.5rem;
                     border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+                    
+                    /* THE FIX: We force an opaque, solid background color. 
+                       We set a safe white for light mode by default. */
+                    background-color: #FFFFFF; 
+                }
+
+                /* Targets Streamlit's Dark Mode specifically to provide an opaque dark background */
+                [data-theme="dark"] div.element-container:has(.sticky-header) {
+                    background-color: #1A1D21; /* Solid dark grey (adapts to Streamlit's default dark theme) */
                 }
             </style>
             """, unsafe_allow_html=True)
@@ -238,7 +246,7 @@ if submitted:
             
             for idx, name in enumerate(selected_courses):
                 with ui_cols[idx]:
-                    # We inject a class here that acts as a 'tracker' for our CSS above
+                    # The rest of the loop remains the same
                     st.markdown(f"<div class='sticky-header'><h3 style='margin:0;'>{name}</h3></div>", unsafe_allow_html=True)
                     
                     if course_data[name]['type'] == 'chronogolf_v2':
