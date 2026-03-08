@@ -29,15 +29,14 @@ course_data = {
 
 def fetch_skyway(date_str, players):
     c_info = course_data["Skyway"]
-    url = "https://www.chronogolf.com/marketplace/v2/teetimes"
     
-    # These are the exact params from your verified request URL
-    params = {
-        "start_date": date_str,
-        "course_ids": c_info["fac_id"],
-        "holes": "9",
-        "page": "1"
-    }
+    # We build the EXACT string that worked in Colab
+    full_url = (
+        f"https://www.chronogolf.com/marketplace/v2/teetimes?"
+        f"start_date={date_str}&"
+        f"course_ids={c_info['fac_id']}&"
+        f"holes=9&page=1"
+    )
     
     headers = {
         "accept": "application/json",
@@ -47,36 +46,13 @@ def fetch_skyway(date_str, players):
     }
     
     try:
-        # The 'chrome110' impersonation is what gets us past Cloudflare
-        resp = curl_requests.get(url, headers=headers, params=params, impersonate="chrome110")
+        # Use the full_url directly instead of 'params='
+        resp = curl_requests.get(full_url, headers=headers, impersonate="chrome110")
         
         if resp.status_code == 200:
             data = resp.json()
-            slots = data.get('teetimes', []) # Using the verified 'teetimes' key
-            standardized_times = []
-            
-            for s in slots:
-                # Filter by player count if requested
-                min_p = s.get('min_player_size', 1)
-                max_p = s.get('max_player_size', 4)
-                if players != "Any" and not (min_p <= int(players) <= max_p):
-                    continue
-                
-                # Extract the price from the nested 'default_price' object
-                price_val = s.get('default_price', {}).get('subtotal', 0.0)
-                
-                standardized_times.append({
-                    "time": s.get('start_time'), # e.g., "6:10"
-                    "course": "Skyway",
-                    "rate": s.get('default_price', {}).get('affiliation_type', 'Standard'),
-                    "price": f"${price_val:.2f}",
-                    "players": f"{min_p}-{max_p}",
-                    "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
-                })
-            return standardized_times
-    except Exception:
-        return []
-    return []
+            slots = data.get('teetimes', [])
+            # ... (rest of your mapping logic)
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
