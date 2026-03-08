@@ -133,6 +133,7 @@ def fetch_kenna(course_name, date_str, players):
             data = resp.json()
             slots = data[0]['teetimes']
             standardized_times = []
+            
             for s in slots:
                 if c_info['crs_id'] != "ANY" and s.get('courseId') != c_info['crs_id']: continue
                 
@@ -143,20 +144,48 @@ def fetch_kenna(course_name, date_str, players):
                 utc_time = datetime.datetime.strptime(s['teetime'], "%Y-%m-%dT%H:%M:%S.000Z").replace(tzinfo=ZoneInfo("UTC"))
                 ny_time = utc_time.astimezone(ZoneInfo("America/New_York"))
                 
-                raw_p = 0
-                for k in ['greenFeeCart', 'greenFee', 'price', 'dueAtCourse']:
-                    if rate.get(k): raw_p = rate.get(k); break
+                # --- UPGRADED PRICING LOGIC ---
+                base_price = 0
+                
+                # 1. Hunt for the primary green fee
+                for k in ['greenFee', 'price', 'greenFeeCart', 'dueAtCourse', 'dueOnline', 'basePrice']:
+                    if k in rate and isinstance(rate[k], (int, float)) and rate[k] > 0:
+                        base_price = rate[k]
+                        break
+                
+                # 2. Catch-all fallback in case they rename their keys (looks for any key with 'fee' or 'price')
+                if base_price == 0:
+                    for k, v in rate.items():
+                        if isinstance(v, (int, float)) and v > 0 and ('fee' in k.lower() or 'price' in k.lower()):
+                            base_price = v
+                            break
+                            
+                # 3. Check for the additional 'fees' array (the + $5.00 fee part)
+                extra_fees = 0
+                if 'fees' in rate and isinstance(rate['fees'], list):
+                    for f in rate['fees']:
+                        extra_fees += f.get('amount', 0)
+                        
+                # 4. Format the final string to match the website exactly
+                if extra_fees > 0:
+                    display_price = f"${base_price / 100:.2f} + ${extra_fees / 100:.2f} fee"
+                else:
+                    display_price = f"${base_price / 100:.2f}"
+                # ------------------------------
 
                 standardized_times.append({
                     "time": ny_time.strftime("%I:%M %p"),
                     "course": course_name,
                     "rate": rate.get('name', 'Standard'),
-                    "price": f"${raw_p / 100:.2f}",
+                    "price": display_price,
                     "players": f"{min(p_list)}-{max(p_list)}",
                     "link": f"https://{c_info['url']}/?course={c_info['fac_id']}&date={date_str}"
                 })
             return standardized_times
-    except: return []
+    except Exception as e: 
+        # print(f"Kenna Error: {e}") # Uncomment if you need to debug
+        return []
+        
     return []
 
 # --- 4. Main UI & Sidebar ---
