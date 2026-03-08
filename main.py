@@ -24,15 +24,10 @@ course_data = {
     }
 }
 
-# --- 3. Helper: Skyway v2 Adapter ---
 def fetch_skyway(date_str, players):
     c_info = course_data["Skyway"]
-    full_url = (
-        f"https://www.chronogolf.com/marketplace/v2/teetimes?"
-        f"start_date={date_str}&"
-        f"course_ids={c_info['fac_id']}&"
-        f"holes=9&page=1"
-    )
+    all_standardized_times = []
+    page = 1
     
     headers = {
         "accept": "application/json",
@@ -40,34 +35,67 @@ def fetch_skyway(date_str, players):
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "x-requested-with": "XMLHttpRequest"
     }
-    
+
     try:
-        resp = curl_requests.get(full_url, headers=headers, impersonate="chrome110")
-        if resp.status_code == 200:
+        while True:
+            # We add the 'page' variable to the URL to cycle through results
+            full_url = (
+                f"https://www.chronogolf.com/marketplace/v2/teetimes?"
+                f"start_date={date_str}&"
+                f"course_ids={c_info['fac_id']}&"
+                f"holes=9&page={page}"
+            )
+            
+            resp = curl_requests.get(full_url, headers=headers, impersonate="chrome110")
+            
+            if resp.status_code != 200:
+                break
+                
             data = resp.json()
             slots = data.get('teetimes', [])
-            standardized_times = []
             
+            # If the list is empty, we've reached the end of the tee sheet
+            if not slots:
+                break
+                
             for s in slots:
+                # 1. Filter by players
                 min_p = s.get('min_player_size', 1)
                 max_p = s.get('max_player_size', 4)
                 if players != "Any" and not (min_p <= int(players) <= max_p):
                     continue
                 
+                # 2. Fix the Time Formatting (Adding AM/PM)
+                # We use the ISO timestamp 'starts_at' to be 100% accurate
+                raw_ts = s.get('starts_at') # Format: 2026-03-12T10:10:00Z
+                dt_obj = datetime.datetime.fromisoformat(raw_ts.replace('Z', '+00:00'))
+                # Convert from UTC to NY time (Skyway is UTC-4 or -5)
+                ny_time = dt_obj.astimezone(ZoneInfo("America/New_York"))
+                display_time = ny_time.strftime("%I:%M %p")
+                
+                # 3. Get Price
                 price_val = s.get('default_price', {}).get('subtotal', 0.0)
                 
-                standardized_times.append({
-                    "time": s.get('start_time'),
+                all_standardized_times.append({
+                    "time": display_time,
                     "course": "Skyway",
                     "rate": s.get('default_price', {}).get('affiliation_type', 'Standard'),
                     "price": f"${price_val:.2f}",
                     "players": f"{min_p}-{max_p}",
                     "link": f"https://www.chronogolf.com/club/{c_info['alias']}?date={date_str}"
                 })
-            return standardized_times
-    except Exception:
+            
+            # Move to the next page
+            page += 1
+            # Safety break: stop if we've pulled 5 pages (rarely needed for one course)
+            if page > 5:
+                break
+                
+        return all_standardized_times
+        
+    except Exception as e:
+        print(f"Skyway Error: {e}")
         return []
-    return []
 
 # --- 4. Helper: The Kenna Adapter (Existing Logic) ---
 def fetch_kenna(course_name, date_str, players):
